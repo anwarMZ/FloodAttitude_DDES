@@ -6,9 +6,9 @@ The script `scripts/TweetAnalysis.R` performs the sentimental Analysis using `Ti
 
 ```bash
 
-tree ./
+tree
 
-``
+```
 
 ### Group Members 
 - Muhammad Zohaib Anwar
