@@ -12,8 +12,6 @@ conda env create -f utils/twint_environment.yml
 source actvivate twint_DDES
 bash scripts/twint_scrapper.sh
 
-
-
 .
 ├── LICENSE
 ├── README.md
