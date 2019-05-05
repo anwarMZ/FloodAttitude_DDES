@@ -5,10 +5,10 @@ library(tidyr)
 library(ggplot2)
 library(cld3)
 
-
+##Reading the data from the csv
 tweets <- read.csv("./dat/FullMontreal_data.csv")
 
-## Processing the Tweet data
+## Processing the Tweet data and Metadat (tweet id, retweets, likes, username)
 text <- data.frame(date = tweets$date, tweets = tweets$tweet, retweets = tweets$retweets_count, favs = tweets$likes_count, id = tweets$id)
 
 # These ones reformat the date, tweets, favourites and retweets field to characters and numeric
@@ -36,38 +36,68 @@ cleaned_tweets <- tidy_tweets %>% anti_join(get_stopwords()) #removes stopwords
 
 # gets the most common words
 tidy_tweets %>% count(word, sort = TRUE)
-View(tidy_tweets)
 
 # bing analysis by date (+ive/-ive)
 bing <- get_sentiments("bing")
 bing
 tweetsent <- tidy_tweets %>% 
-    inner_join(bing) %>%
+    inner_join(bing, by = "word") %>%
+    mutate(date = lubridate::ymd(date)) %>% 
     mutate(score = retweets + favs/2 + 1) %>%
     group_by(sentiment, date) %>%
     summarize(mood = sum(score)) %>%
     ggplot(aes(x=as.Date(date), y=mood, color=sentiment)) + geom_point() + geom_line(aes(group = sentiment))
-tweetsent + ggtitle("Temporal variation in sentiments over time") + xlab("Date") + ylab("Mood") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
-  scale_x_date(date_breaks = "1 week", date_labels = "%b %d")
+tweetsent + ggtitle("Time series of variation in sentiments using Binary (+ive/-ive) scale") + xlab("Time") + ylab("Aggregate Score") +
+  theme_bw()+
+  theme(strip.background =element_rect(fill="White"))+
+  theme(strip.text = element_text(colour = 'Black'))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(axis.line = element_line(colour = "black"),
+        panel.border = element_blank(),
+        panel.background = element_blank())+
+  theme(plot.title = element_text(size = 18, hjust = 0.5, face = "bold")) +
+  theme(axis.text=element_text(size=10, face="bold"),
+        axis.title=element_text(size=14,face="bold"),
+        legend.text=element_text(size=10,face="bold"),
+        legend.title=element_text(size=14, face="bold"))+
+  theme(axis.text.x = element_text(angle = 90,hjust = 1, size = 10))+
+  scale_x_date(date_breaks = "1 week", date_labels = "%b %d")+ 
+  scale_color_discrete(name = "Sentiment")
 
-# plot total difference
+# Sentiment total difference
+changes_w <- tidy_tweets %>% 
+  inner_join(bing, by = "word") %>%
+  mutate(date = lubridate::ymd(date)) %>% 
+  mutate(score = retweets + favs/2 + 1) %>%
+  group_by(sentiment, date) %>%
+  summarize(mood = sum(score))
+
 changes_total <- changes_w %>% 
   spread(key = sentiment, value = mood) %>%
   mutate(diff = positive - negative) %>%
   ggplot(aes(x = as.Date(date), y = diff)) + geom_point() + geom_line()
-changes_total + ggtitle("Difference in sentiments over time") + ylab("Difference in sentiment values") + xlab("Date") + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab("Date") + ylab("Mood") +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
-  scale_x_date(date_breaks = "1 week", date_labels = "%b %d")
+changes_total + ggtitle("Time series of variation in sentiments using Binary (+ive/-ive) scale") + xlab("Time") + ylab("Aggregate Score") +
+  theme_bw()+
+  theme(strip.background =element_rect(fill="White"))+
+  theme(strip.text = element_text(colour = 'Black'))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(axis.line = element_line(colour = "black"),
+        panel.border = element_blank(),
+        panel.background = element_blank())+
+  theme(plot.title = element_text(size = 18, hjust = 0.5, face = "bold")) +
+  theme(axis.text=element_text(size=10, face="bold"),
+        axis.title=element_text(size=14,face="bold"),
+        legend.text=element_text(size=10,face="bold"),
+        legend.title=element_text(size=14, face="bold"))+
+  theme(axis.text.x = element_text(angle = 90,hjust = 1, size = 10))+
+  scale_x_date(date_breaks = "1 week", date_labels = "%b %d")+ 
+  scale_color_discrete(name = "Sentiment")
 
 
+
+#tidy_tweets %>% count(word, sort = TRUE) 
 
 ##Afinn analysis (score)
-tidy_tweets %>% count(word, sort = TRUE) 
-
-#Filters and reveals how many joy words are used in tidy tweets
 afinn <- get_sentiments("afinn") 
 afinn
 
@@ -78,7 +108,6 @@ tweetsent <- tidy_tweets %>%
   group_by(date, id, retweets, favs) %>%
   summarize(mean_emotion = mean(score)) %>% 
   mutate(popularity_index = retweets + favs/2 + 0)
-
 
 whotweet <- tweets %>% 
   select(id, username) %>% 
@@ -91,41 +120,24 @@ tweet_who_mood$username %>% unique %>% length
 
 tweet_who_mood %>% ungroup %>% 
   mutate(date = lubridate::ymd(date)) %>% 
-  ggplot(aes(x=date, y=mean_emotion, group = username)) +
-  geom_line(alpha = 0.2)
-
-
-tweet_who_mood %>% ungroup %>% 
-  mutate(date = lubridate::ymd(date)) %>% 
   ggplot(aes(x=date, y=mean_emotion, size = log(popularity_index + 1))) +
-  geom_point(alpha = 0.08) + 
-  theme_minimal()
-
-# how do people feel?
-tweet_who_mood %>% 
-  glimpse %>% 
-  group_by(username) %>% 
-  summarize(mean_mean_emo = mean(mean_emotion),
-            tweetcount = n()) %>% 
-  mutate(moodrank = dense_rank(mean_mean_emo)) %>% 
-  ggplot(aes(x = moodrank, y = mean_mean_emo, size = tweetcount)) + 
-  geom_point()
-
-curve(qnorm)
-
-tweet_who_mood %>% 
-  glimpse %>% 
-  group_by(username) %>% 
-  summarize(mean_mean_emo = mean(mean_emotion),
-            tweetcount = n()) %>% 
-  ggplot(aes(x = mean_mean_emo)) + geom_histogram(binwidth = 0.5)
-
-tweet_who_mood %>% ungroup %>% 
-  mutate(date = lubridate::ymd(date)) %>% 
-  ggplot(aes(x=date, y=mood)) +
-  geom_hex()
-
-
+  geom_point(alpha = 0.08)+
+  ggtitle("Time series of variation in sentiments using the Afinn Spectrum") + xlab("Time") + ylab("Afinn Spectrum") +
+  theme_bw()+
+  theme(strip.background =element_rect(fill="White"))+
+  theme(strip.text = element_text(colour = 'Black'))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(axis.line = element_line(colour = "black"),
+        panel.border = element_blank(),
+        panel.background = element_blank())+
+  theme(plot.title = element_text(size = 18, hjust = 0.5, face = "bold")) +
+  theme(axis.text=element_text(size=10, face="bold"),
+        axis.title=element_text(size=14,face="bold"),
+        legend.text=element_text(size=10,face="bold"),
+        legend.title=element_text(size=14, face="bold"))+
+  theme(axis.text.x = element_text(angle = 90,hjust = 1, size = 10))+
+  scale_x_date(date_breaks = "1 week", date_labels = "%b %d") + 
+  scale_size_continuous(name = "Popularity index")
 
 
 #nrc - Category analysis
@@ -135,8 +147,24 @@ nrc
 tweetsent <- tidy_tweets %>% 
   ungroup %>% 
   inner_join(nrc %>% ungroup, by = "word") %>%
-  #mutate(score = retweets + favs/2 + 1) %>%
+  mutate(date = lubridate::ymd(date)) %>% 
   group_by(sentiment, date) %>%
   tally %>% 
-  ggplot(aes(x=date, y=n, color=sentiment)) + geom_point()
-tweetsent
+  ggplot(aes(x=date, y=n, color=sentiment)) + geom_point() +geom_path(aes(group=sentiment))
+
+tweetsent+ ggtitle("Time series of variation in sentiments using the NRC Categories") + xlab("Time") + ylab("Frequency") +
+  theme_bw()+
+  theme(strip.background =element_rect(fill="White"))+
+  theme(strip.text = element_text(colour = 'Black'))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(axis.line = element_line(colour = "black"),
+        panel.border = element_blank(),
+        panel.background = element_blank())+
+  theme(plot.title = element_text(size = 18, hjust = 0.5, face = "bold")) +
+  theme(axis.text=element_text(size=10, face="bold"),
+        axis.title=element_text(size=14,face="bold"),
+        legend.text=element_text(size=10,face="bold"),
+        legend.title=element_text(size=14, face="bold"))+
+  theme(axis.text.x = element_text(angle = 90,hjust = 1, size = 10))+
+  scale_x_date(date_breaks = "1 week", date_labels = "%b %d") + 
+  scale_color_discrete(name = "Sentiment")
